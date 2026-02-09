@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { ragId, url } = body
+    const { ragId, url, maxDepth } = body
 
     if (!ragId || !url) {
       return NextResponse.json(
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           urls: [url],
-          max_depth: 3,
+          max_depth: typeof maxDepth === 'number' && maxDepth >= 1 && maxDepth <= 10 ? maxDepth : 5,
         }),
       }
     )

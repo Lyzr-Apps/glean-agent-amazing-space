@@ -394,6 +394,7 @@ function DocumentUploadPanel({
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlDepth, setCrawlDepth] = useState(5);
   const [crawlHistory, setCrawlHistory] = useState<CrawlStatus[]>([]);
   const [activeTab, setActiveTab] = useState<'files' | 'website'>('files');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -558,7 +559,7 @@ function DocumentUploadPanel({
       const res = await fetch('/api/rag/crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ragId: RAG_ID, url: normalizedUrl }),
+        body: JSON.stringify({ ragId: RAG_ID, url: normalizedUrl, maxDepth: crawlDepth }),
       });
       const data = await res.json();
 
@@ -593,7 +594,7 @@ function DocumentUploadPanel({
       );
       setStatusMessage({ text: 'Network error during crawl', type: 'error' });
     }
-  }, [crawlUrl, fetchDocuments]);
+  }, [crawlUrl, crawlDepth, fetchDocuments]);
 
   const getFileExtBadge = (fileName: string) => {
     const ext = fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
@@ -762,8 +763,23 @@ function DocumentUploadPanel({
                       )}
                     </Button>
                   </div>
+                  <div className="flex items-center gap-3 mt-1">
+                    <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Crawl Depth:</label>
+                    <div className="flex items-center gap-1.5">
+                      {[1, 3, 5, 7, 10].map((depth) => (
+                        <button
+                          key={depth}
+                          onClick={() => setCrawlDepth(depth)}
+                          className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-all duration-200 ${crawlDepth === depth ? 'bg-primary text-primary-foreground border-primary shadow-sm' : 'bg-white/60 text-muted-foreground border-border hover:bg-secondary hover:text-secondary-foreground'}`}
+                        >
+                          {depth}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground/70">levels deep</span>
+                  </div>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Enter a website URL to crawl and index its content into the knowledge base. The crawler will follow internal links and extract text from all reachable pages.
+                    Enter a website URL to crawl and index its content. Higher depth follows more internal links for broader coverage.
                   </p>
                 </div>
               </div>
