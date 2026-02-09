@@ -1,0 +1,37 @@
+{
+  "agent_name": "Knowledge Search Agent",
+  "agent_id": "698a4e160c99533d5b94b432",
+  "test_input": "What are the company's remote work policies and guidelines?",
+  "response": {
+    "status": "success",
+    "result": {
+      "summary": "No matching information about the company's remote work policies and guidelines was found in the knowledge base.",
+      "data": {
+        "answer": "After thoroughly searching the connected knowledge base, there is no available information regarding the company's remote work policies and guidelines. If you need details about remote work, you may want to contact your HR department or refer to the company's intranet for current policies.",
+        "confidence": "low",
+        "related_topics": [
+          "HR policies",
+          "Employee handbook",
+          "Work from home best practices"
+        ]
+      },
+      "items": []
+    },
+    "metadata": {
+      "agent_name": "Knowledge Search Agent",
+      "timestamp": "2024-06-13T03:00:54Z"
+    }
+  },
+  "field_types": {
+    "status": "string",
+    "result.summary": "string",
+    "result.data.answer": "string",
+    "result.data.confidence": "string",
+    "result.data.related_topics": "array",
+    "result.items": "array",
+    "metadata.agent_name": "string",
+    "metadata.timestamp": "string"
+  },
+  "status": "passed",
+  "timestamp": "2026-02-09T00:00:00Z"
+}

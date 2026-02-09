@@ -1,0 +1,30 @@
+{
+  "agent_name": "Knowledge Search Agent",
+  "agent_id": "698a4e160c99533d5b94b432",
+  "test_message": "What are the company's remote work policies and guidelines?",
+  "expected_purpose": "Enterprise knowledge search and retrieval with source citations",
+  "timestamp": "2026-02-09T21:14:58.656416",
+  "is_valid_json": true,
+  "validation_errors": [],
+  "actual_response": {
+    "status": "success",
+    "result": {
+      "summary": "No matching information about the company's remote work policies and guidelines was found in the knowledge base.",
+      "data": {
+        "answer": "After thoroughly searching the connected knowledge base, there is no available information regarding the company's remote work policies and guidelines. If you need details about remote work, you may want to contact your HR department or refer to the company's intranet for current policies.",
+        "confidence": "low",
+        "related_topics": [
+          "HR policies",
+          "Employee handbook",
+          "Work from home best practices"
+        ]
+      },
+      "items": []
+    },
+    "metadata": {
+      "agent_name": "Knowledge Search Agent",
+      "timestamp": "2024-06-13T03:00:54Z"
+    }
+  },
+  "raw_response": "{\n  \"status\": \"success\",\n  \"result\": {\n    \"summary\": \"No matching information about the company's remote work policies and guidelines was found in the knowledge base.\",\n    \"data\": {\n      \"answer\": \"After thoroughly searching the connected knowledge base, there is no available information regarding the company's remote work policies and guidelines. If you need details about remote work, you may want to contact your HR department or refer to the company's intranet for current policies.\",\n      \"confidence\": \"low\",\n      \"related_topics\": [\n        \"HR policies\",\n        \"Employee handbook\",\n        \"Work from home best practices\"\n      ]\n    },\n    \"items\": []\n  },\n  \"metadata\": {\n    \"agent_name\": \"Knowledge Search Agent\",\n    \"timestamp\": \"2024-06-13T03:00:54Z\"\n  }\n}"
+}

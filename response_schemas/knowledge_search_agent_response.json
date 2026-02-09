@@ -1,0 +1,67 @@
+{
+  "agent_name": "Knowledge Search Agent",
+  "agent_id": "698a4e160c99533d5b94b432",
+  "agent_purpose": "Enterprise knowledge search and retrieval with source citations",
+  "description": "Searches enterprise knowledge bases and returns answers with source citations, confidence levels, and related topics.",
+  "response_schema": {
+    "status": "string",
+    "result": {
+      "summary": "string",
+      "data": {
+        "answer": "string",
+        "confidence": "string",
+        "related_topics": [
+          "string"
+        ]
+      },
+      "items": [
+        "any"
+      ]
+    },
+    "metadata": {
+      "agent_name": "string",
+      "timestamp": "string"
+    }
+  },
+  "example_response": {
+    "status": "error",
+    "result": {
+      "summary": "No matching information was found in the knowledge base.",
+      "data": {
+        "answer": "After searching the connected knowledge base, there are no relevant document chunks available to answer your query. Please try refining your question or provide more specific details.",
+        "confidence": "low",
+        "related_topics": [
+          "knowledge base search tips",
+          "how to phrase effective queries"
+        ]
+      },
+      "items": []
+    },
+    "metadata": {
+      "agent_name": "Knowledge Search Agent",
+      "timestamp": "2024-06-13T09:19:34Z"
+    }
+  },
+  "is_actual_tested": true,
+  "test_timestamp": "2026-02-09T21:15:17.338119",
+  "test_message_used": "Hello, provide a sample response",
+  "actual_test_response": {
+    "status": "error",
+    "result": {
+      "summary": "No matching information was found in the knowledge base.",
+      "data": {
+        "answer": "After searching the connected knowledge base, there are no relevant document chunks available to answer your query. Please try refining your question or provide more specific details.",
+        "confidence": "low",
+        "related_topics": [
+          "knowledge base search tips",
+          "how to phrase effective queries"
+        ]
+      },
+      "items": []
+    },
+    "metadata": {
+      "agent_name": "Knowledge Search Agent",
+      "timestamp": "2024-06-13T09:19:34Z"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "agents": [
+    {
+      "name": "Knowledge Search Agent",
+      "agent_id": "698a4e160c99533d5b94b432",
+      "type": "single",
+      "has_knowledge_base": true,
+      "rag_id": "698a4e05de7de278e55d2e44"
+    }
+  ]
+}

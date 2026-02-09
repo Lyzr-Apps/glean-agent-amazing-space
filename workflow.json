@@ -1,0 +1,32 @@
+{
+  "nodes": [
+    {
+      "id": "input_node",
+      "type": "Input",
+      "label": "User Query",
+      "nodeCategory": "input"
+    },
+    {
+      "id": "knowledge_search_agent",
+      "type": "Agent",
+      "label": "Knowledge Search Agent",
+      "nodeCategory": "agent"
+    },
+    {
+      "id": "output_node",
+      "type": "Output",
+      "label": "Search Results",
+      "nodeCategory": "end"
+    }
+  ],
+  "edges": [
+    {
+      "source": "input_node",
+      "target": "knowledge_search_agent"
+    },
+    {
+      "source": "knowledge_search_agent",
+      "target": "output_node"
+    }
+  ]
+}

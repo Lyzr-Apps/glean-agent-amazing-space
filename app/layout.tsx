@@ -6,8 +6,8 @@ import { IframeLoggerInit } from '@/components/IframeLoggerInit'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Next.js App',
-  description: 'Built with Next.js, React, and Tailwind CSS',
+  title: 'Knowledge Search',
+  description: 'Search your internal company knowledge base with AI-powered answers',
 }
 
 export default function RootLayout({
