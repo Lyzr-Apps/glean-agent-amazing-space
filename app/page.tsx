@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FiSearch, FiX, FiChevronDown, FiChevronUp, FiExternalLink, FiMenu, FiFileText, FiInfo, FiArrowRight, FiLoader, FiUpload, FiUploadCloud, FiTrash2, FiCheck, FiAlertCircle } from 'react-icons/fi';
+import { FiSearch, FiX, FiChevronDown, FiChevronUp, FiExternalLink, FiMenu, FiFileText, FiInfo, FiArrowRight, FiLoader, FiUpload, FiUploadCloud, FiTrash2, FiCheck, FiAlertCircle, FiGlobe, FiLink } from 'react-icons/fi';
 
 // ---- Types ----
 interface HistoryItem {
@@ -53,6 +53,13 @@ interface UploadStatus {
   fileName: string;
   status: 'uploading' | 'success' | 'error';
   message?: string;
+}
+
+interface CrawlStatus {
+  url: string;
+  status: 'crawling' | 'success' | 'error';
+  message?: string;
+  pagesProcessed?: number;
 }
 
 // ---- Constants ----
@@ -386,6 +393,9 @@ function DocumentUploadPanel({
   const [isDragOver, setIsDragOver] = useState(false);
   const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [crawlHistory, setCrawlHistory] = useState<CrawlStatus[]>([]);
+  const [activeTab, setActiveTab] = useState<'files' | 'website'>('files');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = useCallback(async () => {
@@ -526,6 +536,65 @@ function DocumentUploadPanel({
     }
   }, [handleFiles]);
 
+  const handleCrawl = useCallback(async () => {
+    const url = crawlUrl.trim();
+    if (!url) return;
+
+    // Basic URL validation
+    try {
+      new URL(url.startsWith('http') ? url : `https://${url}`);
+    } catch {
+      setStatusMessage({ text: 'Please enter a valid URL (e.g., https://example.com)', type: 'error' });
+      return;
+    }
+
+    const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
+
+    const newCrawl: CrawlStatus = { url: normalizedUrl, status: 'crawling' };
+    setCrawlHistory((prev) => [newCrawl, ...prev]);
+    setStatusMessage(null);
+
+    try {
+      const res = await fetch('/api/rag/crawl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ragId: RAG_ID, url: normalizedUrl }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setCrawlHistory((prev) =>
+          prev.map((c) =>
+            c.url === normalizedUrl && c.status === 'crawling'
+              ? { ...c, status: 'success' as const, message: `Crawled successfully (${data.pagesProcessed || 0} pages processed)`, pagesProcessed: data.pagesProcessed }
+              : c
+          )
+        );
+        setStatusMessage({ text: `Website crawled and indexed successfully`, type: 'success' });
+        setCrawlUrl('');
+        fetchDocuments();
+      } else {
+        setCrawlHistory((prev) =>
+          prev.map((c) =>
+            c.url === normalizedUrl && c.status === 'crawling'
+              ? { ...c, status: 'error' as const, message: data.error || 'Crawl failed' }
+              : c
+          )
+        );
+        setStatusMessage({ text: data.error || 'Website crawl failed', type: 'error' });
+      }
+    } catch {
+      setCrawlHistory((prev) =>
+        prev.map((c) =>
+          c.url === normalizedUrl && c.status === 'crawling'
+            ? { ...c, status: 'error' as const, message: 'Network error' }
+            : c
+        )
+      );
+      setStatusMessage({ text: 'Network error during crawl', type: 'error' });
+    }
+  }, [crawlUrl, fetchDocuments]);
+
   const getFileExtBadge = (fileName: string) => {
     const ext = fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
     const colorMap: Record<string, string> = {
@@ -549,12 +618,30 @@ function DocumentUploadPanel({
               <FiUploadCloud className="w-4 h-4 text-primary" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-foreground tracking-[-0.01em]">Knowledge Base Documents</h2>
-              <p className="text-xs text-muted-foreground">Upload and manage documents for AI-powered search</p>
+              <h2 className="text-base font-semibold text-foreground tracking-[-0.01em]">Knowledge Base</h2>
+              <p className="text-xs text-muted-foreground">Upload files or crawl websites for AI-powered search</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-secondary transition-colors">
             <FiX className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-border/50">
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 border-b-2 ${activeTab === 'files' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/30'}`}
+          >
+            <FiUpload className="w-4 h-4" />
+            Upload Files
+          </button>
+          <button
+            onClick={() => setActiveTab('website')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all duration-200 border-b-2 ${activeTab === 'website' ? 'border-primary text-primary bg-primary/5' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/30'}`}
+          >
+            <FiGlobe className="w-4 h-4" />
+            Crawl Website
           </button>
         </div>
 
@@ -571,68 +658,159 @@ function DocumentUploadPanel({
             </div>
           )}
 
-          {/* Drop Zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`relative border-2 border-dashed rounded-[0.875rem] p-8 text-center transition-all duration-200 cursor-pointer ${isDragOver ? 'border-primary bg-primary/5 shadow-inner' : 'border-border/70 hover:border-primary/50 hover:bg-primary/[0.02]'}`}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ACCEPTED_FILE_TYPES}
-              multiple
-              onChange={handleFileInput}
-              className="hidden"
-            />
-            <div className="flex flex-col items-center gap-3">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isDragOver ? 'bg-primary/15' : 'bg-primary/10'}`}>
-                <FiUploadCloud className={`w-7 h-7 transition-colors ${isDragOver ? 'text-primary' : 'text-primary/70'}`} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  {isDragOver ? 'Drop files here' : 'Drag and drop files here'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">or click to browse -- PDF, DOCX, TXT accepted</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Upload Progress */}
-          {uploads.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Recent Uploads</h3>
-                <button onClick={() => setUploads([])} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Clear</button>
-              </div>
-              <div className="space-y-1.5">
-                {uploads.map((upload, i) => (
-                  <div key={`${upload.fileName}-${i}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary/40 border border-border/30">
-                    <div className="flex-shrink-0">
-                      {upload.status === 'uploading' && <FiLoader className="w-4 h-4 text-primary animate-spin" />}
-                      {upload.status === 'success' && <FiCheck className="w-4 h-4 text-emerald-600" />}
-                      {upload.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{upload.fileName}</p>
-                      {upload.message && (
-                        <p className={`text-[11px] mt-0.5 ${upload.status === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{upload.message}</p>
-                      )}
-                    </div>
-                    {upload.status === 'uploading' && (
-                      <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
-                        <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
-                      </div>
-                    )}
+          {/* FILE UPLOAD TAB */}
+          {activeTab === 'files' && (
+            <>
+              {/* Drop Zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`relative border-2 border-dashed rounded-[0.875rem] p-8 text-center transition-all duration-200 cursor-pointer ${isDragOver ? 'border-primary bg-primary/5 shadow-inner' : 'border-border/70 hover:border-primary/50 hover:bg-primary/[0.02]'}`}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_FILE_TYPES}
+                  multiple
+                  onChange={handleFileInput}
+                  className="hidden"
+                />
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isDragOver ? 'bg-primary/15' : 'bg-primary/10'}`}>
+                    <FiUploadCloud className={`w-7 h-7 transition-colors ${isDragOver ? 'text-primary' : 'text-primary/70'}`} />
                   </div>
-                ))}
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {isDragOver ? 'Drop files here' : 'Drag and drop files here'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">or click to browse -- PDF, DOCX, TXT accepted</p>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              {/* Upload Progress */}
+              {uploads.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Recent Uploads</h3>
+                    <button onClick={() => setUploads([])} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Clear</button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {uploads.map((upload, i) => (
+                      <div key={`${upload.fileName}-${i}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary/40 border border-border/30">
+                        <div className="flex-shrink-0">
+                          {upload.status === 'uploading' && <FiLoader className="w-4 h-4 text-primary animate-spin" />}
+                          {upload.status === 'success' && <FiCheck className="w-4 h-4 text-emerald-600" />}
+                          {upload.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground truncate">{upload.fileName}</p>
+                          {upload.message && (
+                            <p className={`text-[11px] mt-0.5 ${upload.status === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{upload.message}</p>
+                          )}
+                        </div>
+                        {upload.status === 'uploading' && (
+                          <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
+                            <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {/* Existing Documents */}
+          {/* WEBSITE CRAWL TAB */}
+          {activeTab === 'website' && (
+            <>
+              {/* Crawl Input */}
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold text-foreground uppercase tracking-wider">Website URL</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <FiLink className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="url"
+                        placeholder="https://example.com"
+                        value={crawlUrl}
+                        onChange={(e) => setCrawlUrl(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleCrawl();
+                          }
+                        }}
+                        className="pl-10 h-10 text-sm rounded-[0.625rem] bg-white/60 border border-border/70 focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleCrawl}
+                      disabled={!crawlUrl.trim() || crawlHistory.some((c) => c.status === 'crawling')}
+                      className="h-10 px-5 rounded-[0.625rem] text-sm font-medium"
+                    >
+                      {crawlHistory.some((c) => c.status === 'crawling') ? (
+                        <FiLoader className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <FiGlobe className="w-4 h-4 mr-1.5" />
+                          Crawl
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Enter a website URL to crawl and index its content into the knowledge base. The crawler will follow internal links and extract text from all reachable pages.
+                  </p>
+                </div>
+              </div>
+
+              {/* Crawl History */}
+              {crawlHistory.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Crawl History</h3>
+                    <button
+                      onClick={() => setCrawlHistory((prev) => prev.filter((c) => c.status === 'crawling'))}
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Clear Completed
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {crawlHistory.map((crawl, i) => (
+                      <div key={`${crawl.url}-${i}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary/40 border border-border/30">
+                        <div className="flex-shrink-0">
+                          {crawl.status === 'crawling' && <FiLoader className="w-4 h-4 text-primary animate-spin" />}
+                          {crawl.status === 'success' && <FiCheck className="w-4 h-4 text-emerald-600" />}
+                          {crawl.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <FiGlobe className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            <p className="text-sm text-foreground truncate">{crawl.url}</p>
+                          </div>
+                          {crawl.message && (
+                            <p className={`text-[11px] mt-0.5 ${crawl.status === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{crawl.message}</p>
+                          )}
+                        </div>
+                        {crawl.status === 'crawling' && (
+                          <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
+                            <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '45%' }} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Existing Documents (shown on both tabs) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Documents in Knowledge Base</h3>
@@ -658,7 +836,7 @@ function DocumentUploadPanel({
               <div className="text-center py-10 rounded-lg border border-dashed border-border/50">
                 <FiFileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">No documents found</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">Upload documents above to populate your knowledge base</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Upload files or crawl a website to populate your knowledge base</p>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -695,7 +873,11 @@ function DocumentUploadPanel({
 
         {/* Panel Footer */}
         <div className="px-6 py-3 border-t border-border/50 bg-secondary/20">
-          <p className="text-[11px] text-muted-foreground text-center">Uploaded documents are processed and indexed for AI-powered knowledge search</p>
+          <p className="text-[11px] text-muted-foreground text-center">
+            {activeTab === 'files'
+              ? 'Uploaded documents are processed and indexed for AI-powered knowledge search'
+              : 'Crawled website content is extracted and indexed for AI-powered knowledge search'}
+          </p>
         </div>
       </div>
     </div>
