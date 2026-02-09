@@ -391,7 +391,9 @@ function DocumentUploadPanel({
   const fetchDocuments = useCallback(async () => {
     setLoadingDocs(true);
     try {
-      const res = await fetch(`/api/rag?ragId=${RAG_ID}`);
+      const res = await fetch('/api/rag', {
+        headers: { 'x-rag-id': RAG_ID },
+      });
       if (res.ok) {
         const data = await res.json();
         const docs = Array.isArray(data?.documents) ? data.documents : Array.isArray(data) ? data : [];

@@ -13,7 +13,10 @@ const FILE_TYPE_MAP: Record<string, 'pdf' | 'docx' | 'txt'> = {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const ragId = searchParams.get('ragId')
+    // Try query param first, then fall back to custom header.
+    // Preview proxies can strip query parameters from URLs,
+    // but headers are always forwarded intact.
+    const ragId = searchParams.get('ragId') || request.headers.get('x-rag-id')
 
     if (!ragId) {
       return NextResponse.json(
