@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
           'x-api-key': LYZR_API_KEY,
         },
         body: JSON.stringify({
-          url: url,
+          urls: [url],
           max_depth: 3,
         }),
       }
