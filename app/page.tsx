@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FiSearch, FiX, FiChevronDown, FiChevronUp, FiExternalLink, FiMenu, FiFileText, FiInfo, FiArrowRight, FiLoader } from 'react-icons/fi';
+import { FiSearch, FiX, FiChevronDown, FiChevronUp, FiExternalLink, FiMenu, FiFileText, FiInfo, FiArrowRight, FiLoader, FiUpload, FiUploadCloud, FiTrash2, FiCheck, FiAlertCircle } from 'react-icons/fi';
 
 // ---- Types ----
 interface HistoryItem {
@@ -43,9 +43,23 @@ interface AgentResponse {
   };
 }
 
+interface KBDocument {
+  fileName: string;
+  fileType: string;
+  status: string;
+}
+
+interface UploadStatus {
+  fileName: string;
+  status: 'uploading' | 'success' | 'error';
+  message?: string;
+}
+
 // ---- Constants ----
 const AGENT_ID = '698a4e160c99533d5b94b432';
+const RAG_ID = '698a4e05de7de278e55d2e44';
 const HISTORY_KEY = 'knowledge_search_history';
+const ACCEPTED_FILE_TYPES = '.pdf,.docx,.txt';
 
 const DOC_TYPE_FILTERS = ['Policies', 'Wikis', 'Guides', 'FAQs'];
 const DEPT_FILTERS = ['Engineering', 'HR', 'Finance', 'Marketing', 'Operations'];
@@ -359,6 +373,333 @@ function HistorySidebar({
   );
 }
 
+function DocumentUploadPanel({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const [documents, setDocuments] = useState<KBDocument[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [uploads, setUploads] = useState<UploadStatus[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [deletingFiles, setDeletingFiles] = useState<Set<string>>(new Set());
+  const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchDocuments = useCallback(async () => {
+    setLoadingDocs(true);
+    try {
+      const res = await fetch(`/api/rag?ragId=${RAG_ID}`);
+      if (res.ok) {
+        const data = await res.json();
+        const docs = Array.isArray(data?.documents) ? data.documents : Array.isArray(data) ? data : [];
+        setDocuments(docs);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingDocs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchDocuments();
+      setStatusMessage(null);
+    }
+  }, [isOpen, fetchDocuments]);
+
+  const isValidFile = (file: File): boolean => {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+    return ['pdf', 'docx', 'txt'].includes(ext);
+  };
+
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter(isValidFile);
+    if (fileArray.length === 0) {
+      setStatusMessage({ text: 'No valid files selected. Accepted types: PDF, DOCX, TXT', type: 'error' });
+      return;
+    }
+
+    const newUploads: UploadStatus[] = fileArray.map((f) => ({
+      fileName: f.name,
+      status: 'uploading' as const,
+    }));
+    setUploads((prev) => [...newUploads, ...prev]);
+    setStatusMessage(null);
+
+    let successCount = 0;
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      try {
+        const formData = new FormData();
+        formData.append('ragId', RAG_ID);
+        formData.append('file', file);
+        const res = await fetch('/api/rag', {
+          method: 'POST',
+          body: formData,
+        });
+        if (res.ok) {
+          setUploads((prev) =>
+            prev.map((u) =>
+              u.fileName === file.name ? { ...u, status: 'success' as const, message: 'Uploaded successfully' } : u
+            )
+          );
+          successCount++;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          setUploads((prev) =>
+            prev.map((u) =>
+              u.fileName === file.name ? { ...u, status: 'error' as const, message: errData?.error ?? 'Upload failed' } : u
+            )
+          );
+        }
+      } catch {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.fileName === file.name ? { ...u, status: 'error' as const, message: 'Network error' } : u
+          )
+        );
+      }
+    }
+
+    if (successCount > 0) {
+      setStatusMessage({ text: `${successCount} file(s) uploaded and queued for training`, type: 'success' });
+      fetchDocuments();
+    }
+  }, [fetchDocuments]);
+
+  const handleDelete = useCallback(async (fileName: string) => {
+    setDeletingFiles((prev) => new Set(prev).add(fileName));
+    try {
+      const res = await fetch('/api/rag', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ragId: RAG_ID, documentNames: [fileName] }),
+      });
+      if (res.ok) {
+        setDocuments((prev) => prev.filter((d) => d.fileName !== fileName));
+        setStatusMessage({ text: `"${fileName}" deleted successfully`, type: 'success' });
+      } else {
+        setStatusMessage({ text: `Failed to delete "${fileName}"`, type: 'error' });
+      }
+    } catch {
+      setStatusMessage({ text: `Error deleting "${fileName}"`, type: 'error' });
+    } finally {
+      setDeletingFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(fileName);
+        return next;
+      });
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  }, [handleFiles]);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFiles(e.target.files);
+      e.target.value = '';
+    }
+  }, [handleFiles]);
+
+  const getFileExtBadge = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
+    const colorMap: Record<string, string> = {
+      PDF: 'bg-red-100 text-red-700 border-red-200',
+      DOCX: 'bg-blue-100 text-blue-700 border-blue-200',
+      TXT: 'bg-gray-100 text-gray-600 border-gray-200',
+    };
+    return { ext, className: colorMap[ext] ?? 'bg-gray-100 text-gray-600 border-gray-200' };
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col backdrop-blur-[16px] bg-white/90 border border-white/[0.18] shadow-xl rounded-[0.875rem] overflow-hidden">
+        {/* Panel Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <FiUploadCloud className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-foreground tracking-[-0.01em]">Knowledge Base Documents</h2>
+              <p className="text-xs text-muted-foreground">Upload and manage documents for AI-powered search</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-secondary transition-colors">
+            <FiX className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* Status Message */}
+          {statusMessage && (
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium ${statusMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {statusMessage.type === 'success' ? <FiCheck className="w-4 h-4 flex-shrink-0" /> : <FiAlertCircle className="w-4 h-4 flex-shrink-0" />}
+              <span>{statusMessage.text}</span>
+              <button onClick={() => setStatusMessage(null)} className="ml-auto p-0.5 rounded hover:bg-black/5">
+                <FiX className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Drop Zone */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`relative border-2 border-dashed rounded-[0.875rem] p-8 text-center transition-all duration-200 cursor-pointer ${isDragOver ? 'border-primary bg-primary/5 shadow-inner' : 'border-border/70 hover:border-primary/50 hover:bg-primary/[0.02]'}`}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_FILE_TYPES}
+              multiple
+              onChange={handleFileInput}
+              className="hidden"
+            />
+            <div className="flex flex-col items-center gap-3">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${isDragOver ? 'bg-primary/15' : 'bg-primary/10'}`}>
+                <FiUploadCloud className={`w-7 h-7 transition-colors ${isDragOver ? 'text-primary' : 'text-primary/70'}`} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {isDragOver ? 'Drop files here' : 'Drag and drop files here'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">or click to browse -- PDF, DOCX, TXT accepted</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Upload Progress */}
+          {uploads.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Recent Uploads</h3>
+                <button onClick={() => setUploads([])} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Clear</button>
+              </div>
+              <div className="space-y-1.5">
+                {uploads.map((upload, i) => (
+                  <div key={`${upload.fileName}-${i}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary/40 border border-border/30">
+                    <div className="flex-shrink-0">
+                      {upload.status === 'uploading' && <FiLoader className="w-4 h-4 text-primary animate-spin" />}
+                      {upload.status === 'success' && <FiCheck className="w-4 h-4 text-emerald-600" />}
+                      {upload.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-500" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground truncate">{upload.fileName}</p>
+                      {upload.message && (
+                        <p className={`text-[11px] mt-0.5 ${upload.status === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{upload.message}</p>
+                      )}
+                    </div>
+                    {upload.status === 'uploading' && (
+                      <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
+                        <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '60%' }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Existing Documents */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">Documents in Knowledge Base</h3>
+              <button onClick={fetchDocuments} disabled={loadingDocs} className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors disabled:opacity-50">
+                {loadingDocs ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+
+            {loadingDocs ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-3 rounded-lg bg-secondary/30">
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                    <div className="flex-1">
+                      <Skeleton className="h-3.5 w-48 mb-1.5" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="text-center py-10 rounded-lg border border-dashed border-border/50">
+                <FiFileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No documents found</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Upload documents above to populate your knowledge base</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {documents.map((doc) => {
+                  const badge = getFileExtBadge(doc.fileName);
+                  const isDeleting = deletingFiles.has(doc.fileName);
+                  return (
+                    <div key={doc.fileName} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border/30 transition-all duration-200 hover:bg-secondary/30 ${isDeleting ? 'opacity-50' : ''}`}>
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <FiFileText className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{doc.fileName}</p>
+                        {doc.status && (
+                          <p className="text-[11px] text-muted-foreground capitalize">{doc.status}</p>
+                        )}
+                      </div>
+                      <Badge variant="outline" className={`text-[10px] font-medium flex-shrink-0 ${badge.className}`}>{badge.ext}</Badge>
+                      <button
+                        onClick={() => handleDelete(doc.fileName)}
+                        disabled={isDeleting}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30"
+                        title="Delete document"
+                      >
+                        {isDeleting ? <FiLoader className="w-4 h-4 animate-spin" /> : <FiTrash2 className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Panel Footer */}
+        <div className="px-6 py-3 border-t border-border/50 bg-secondary/20">
+          <p className="text-[11px] text-muted-foreground text-center">Uploaded documents are processed and indexed for AI-powered knowledge search</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AgentStatusCard({ isActive }: { isActive: boolean }) {
   return (
     <Card className="backdrop-blur-[16px] bg-white/75 border border-white/[0.18] shadow-sm rounded-[0.875rem]">
@@ -387,6 +728,7 @@ export default function Home() {
   const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set());
   const [sampleMode, setSampleMode] = useState(false);
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const [uploadPanelOpen, setUploadPanelOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Load history from localStorage
@@ -542,6 +884,9 @@ export default function Home() {
         onClose={() => setSidebarOpen(false)}
       />
 
+      {/* Document Upload Panel */}
+      <DocumentUploadPanel isOpen={uploadPanelOpen} onClose={() => setUploadPanelOpen(false)} />
+
       {/* Main Content */}
       <div className="lg:ml-72">
         {/* Header */}
@@ -563,6 +908,9 @@ export default function Home() {
                 <Label htmlFor="sample-toggle" className="text-xs text-muted-foreground font-medium cursor-pointer">Sample Data</Label>
                 <Switch id="sample-toggle" checked={sampleMode} onCheckedChange={setSampleMode} />
               </div>
+              <button onClick={() => setUploadPanelOpen(true)} className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors" title="Upload Documents">
+                <FiUpload className="w-4 h-4 text-primary" />
+              </button>
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-xs font-semibold text-primary">JD</span>
               </div>
