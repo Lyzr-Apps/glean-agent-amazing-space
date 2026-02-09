@@ -60,6 +60,7 @@ interface CrawlStatus {
   status: 'crawling' | 'success' | 'error';
   message?: string;
   pagesProcessed?: number;
+  rawResponse?: any;
 }
 
 // ---- Constants ----
@@ -567,11 +568,11 @@ function DocumentUploadPanel({
         setCrawlHistory((prev) =>
           prev.map((c) =>
             c.url === normalizedUrl && c.status === 'crawling'
-              ? { ...c, status: 'success' as const, message: `Crawled successfully (${data.pagesProcessed || 0} pages processed)`, pagesProcessed: data.pagesProcessed }
+              ? { ...c, status: 'success' as const, message: `Crawled successfully (${data.pagesProcessed || 0} pages processed)`, pagesProcessed: data.pagesProcessed, rawResponse: data.rawResponse }
               : c
           )
         );
-        setStatusMessage({ text: `Website crawled and indexed successfully`, type: 'success' });
+        setStatusMessage({ text: `Website crawled and indexed successfully (${data.pagesProcessed || 0} pages)`, type: 'success' });
         setCrawlUrl('');
         fetchDocuments();
       } else {
@@ -798,25 +799,33 @@ function DocumentUploadPanel({
                   </div>
                   <div className="space-y-1.5">
                     {crawlHistory.map((crawl, i) => (
-                      <div key={`${crawl.url}-${i}`} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-secondary/40 border border-border/30">
-                        <div className="flex-shrink-0">
-                          {crawl.status === 'crawling' && <FiLoader className="w-4 h-4 text-primary animate-spin" />}
-                          {crawl.status === 'success' && <FiCheck className="w-4 h-4 text-emerald-600" />}
-                          {crawl.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-500" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <FiGlobe className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                            <p className="text-sm text-foreground truncate">{crawl.url}</p>
+                      <div key={`${crawl.url}-${i}`} className="rounded-lg bg-secondary/40 border border-border/30">
+                        <div className="flex items-center gap-3 px-3 py-2.5">
+                          <div className="flex-shrink-0">
+                            {crawl.status === 'crawling' && <FiLoader className="w-4 h-4 text-primary animate-spin" />}
+                            {crawl.status === 'success' && <FiCheck className="w-4 h-4 text-emerald-600" />}
+                            {crawl.status === 'error' && <FiAlertCircle className="w-4 h-4 text-red-500" />}
                           </div>
-                          {crawl.message && (
-                            <p className={`text-[11px] mt-0.5 ${crawl.status === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{crawl.message}</p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <FiGlobe className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                              <p className="text-sm text-foreground truncate">{crawl.url}</p>
+                            </div>
+                            {crawl.message && (
+                              <p className={`text-[11px] mt-0.5 ${crawl.status === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{crawl.message}</p>
+                            )}
+                          </div>
+                          {crawl.status === 'crawling' && (
+                            <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
+                              <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '45%' }} />
+                            </div>
                           )}
                         </div>
-                        {crawl.status === 'crawling' && (
-                          <div className="w-16 h-1.5 rounded-full bg-border overflow-hidden">
-                            <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: '45%' }} />
-                          </div>
+                        {crawl.rawResponse && crawl.status === 'success' && (
+                          <details className="px-3 pb-2.5">
+                            <summary className="text-[11px] text-primary cursor-pointer hover:underline font-medium">View API Response</summary>
+                            <pre className="mt-1.5 text-[10px] text-muted-foreground bg-black/5 rounded-md p-2 overflow-x-auto max-h-40 whitespace-pre-wrap break-all">{JSON.stringify(crawl.rawResponse, null, 2)}</pre>
+                          </details>
                         )}
                       </div>
                     ))}

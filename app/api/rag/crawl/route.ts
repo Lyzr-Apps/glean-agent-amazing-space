@@ -73,13 +73,56 @@ export async function POST(request: NextRequest) {
 
     const crawlData = await crawlResponse.json()
 
+    // Log the full response so we can see the actual structure
+    console.log('[Crawl API] Full Lyzr response:', JSON.stringify(crawlData, null, 2))
+
+    // Attempt to extract page/document count from various possible fields
+    const extractCount = (data: any): number => {
+      if (!data || typeof data !== 'object') return 0
+      // Check common field names at top level
+      const candidates = [
+        data.document_count,
+        data.num_documents,
+        data.total_documents,
+        data.pages,
+        data.pages_processed,
+        data.num_pages,
+        data.total_pages,
+        data.chunks,
+        data.num_chunks,
+        data.total_chunks,
+        data.count,
+        data.total,
+        data.num_nodes,
+        data.documents_processed,
+      ]
+      for (const val of candidates) {
+        if (typeof val === 'number' && val > 0) return val
+      }
+      // Check if response is an array (some APIs return array of processed docs)
+      if (Array.isArray(data)) return data.length
+      // Check nested "data" or "result" objects
+      if (data.data && typeof data.data === 'object') {
+        const nested = extractCount(data.data)
+        if (nested > 0) return nested
+      }
+      if (data.result && typeof data.result === 'object') {
+        const nested = extractCount(data.result)
+        if (nested > 0) return nested
+      }
+      return 0
+    }
+
+    const pagesProcessed = extractCount(crawlData) || 1
+
     return NextResponse.json({
       success: true,
       message: 'Website crawled and trained successfully',
       url,
-      pagesProcessed: crawlData.document_count || crawlData.pages || crawlData.chunks || 1,
+      pagesProcessed,
       ragId,
       timestamp: new Date().toISOString(),
+      rawResponse: crawlData,
     })
   } catch (error) {
     return NextResponse.json(
